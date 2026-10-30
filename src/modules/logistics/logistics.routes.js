@@ -1,0 +1,10 @@
+const router = require('express').Router()
+const { listRequests, createRequest, createPublicRequest, getPublicRequest, getManagedRequest } = require('./logistics.controller')
+const { requireAuth } = require('../../shared/middleware/auth')
+router.post('/public-requests', createPublicRequest)
+router.get('/public-requests/:id', getPublicRequest)
+router.use(requireAuth)
+router.get('/requests', listRequests)
+router.get('/requests/:id', getManagedRequest)
+router.post('/requests', createRequest)
+module.exports = router
