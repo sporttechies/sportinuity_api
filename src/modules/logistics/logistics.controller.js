@@ -1,104 +1,153 @@
+// Manager-facing request management: list, view, create, edit, approve,
+// reject, change status and delete.
 const { z } = require("zod");
 const repository = require("./logistics.repository");
-const travellerSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  type: z.enum(["regular", "vip", "vvip", "staff"]).default("regular"),
-  documentNumber: z.string().optional(),
-  dietary: z.string().optional(),
-  category: z.enum(["adult", "child", "infant"]).optional(),
+const schemas = require("./logistics.schemas");
+const { serializeRequest } = require("./logistics.serializer");
+const notify = require("../../shared/mail/notify");
+const { HttpError } = require("../../shared/http-error");
+const { REQUEST_STATUSES, MANAGER_TRANSITIONS } = require("../../shared/constants");
+
+const actorOf = (req) => ({ id: req.user.id, role: "manager" });
+const canMove = (from, to) => (MANAGER_TRANSITIONS[from] || []).includes(to);
+
+const statusBody = z.object({
+  status: z.enum(REQUEST_STATUSES),
+  reason: z.string().trim().max(1000).optional(),
 });
-const requestSchema = z.object({
-  team: z.string().min(2),
-  event: z.string().min(2),
-  location: z.string().min(2),
-  people: z.number().int().positive(),
-  from: z.string().optional(),
-  departure: z.string().optional(),
-  returnDate: z.string().optional(),
-  contact: z
-    .object({
-      name: z.string().optional(),
-      email: z.string().email().optional(),
-      phone: z.string().optional(),
-    })
-    .optional(),
-  travellers: z.array(travellerSchema).optional(),
+const rejectBody = z.object({
+  reason: z.string().trim().min(3, "Give the team a reason").max(1000),
 });
-function serialize(row) {
-  return {
-    id: row.reference,
-    team: row.team_name,
-    event: row.event_name,
-    location: row.destination,
-    people: row.traveller_count,
-    status: row.status,
-    createdAt: row.created_at,
-    from: row.origin,
-    departure: row.departure_date,
-    returnDate: row.return_date,
-    contact: {
-      name: row.contact_name,
-      email: row.contact_email,
-      phone: row.contact_phone,
-    },
-    travellers: row.travellers || [],
-  };
+const createBody = schemas.createRequest.extend({ teamId: z.uuid() });
+
+async function load(reference) {
+  const row = await repository.findByReference(reference);
+  if (!row) throw new HttpError(404, "Request not found");
+  return row;
 }
-async function listRequests(_req, res, next) {
+
+async function listRequests(req, res, next) {
   try {
-    res.json({ data: (await repository.listRequests()).map(serialize) });
+    const { status, q, dateFrom, dateTo, limit, offset, teamId } = req.query;
+    const [result, counts] = await Promise.all([
+      repository.listRequests({
+        status,
+        q,
+        dateFrom,
+        dateTo,
+        limit,
+        offset,
+        teamProfileId: teamId,
+      }),
+      repository.statusCounts(teamId),
+    ]);
+    res.json({
+      data: result.rows.map((row) => serializeRequest(row)),
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+      counts,
+    });
   } catch (error) {
     next(error);
   }
 }
+
+async function getRequest(req, res, next) {
+  try {
+    res.json({
+      data: serializeRequest(await load(req.params.reference), { detail: true }),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function createRequest(req, res, next) {
   try {
-    const input = requestSchema.parse(req.body);
-    const row = await repository.createRequest({
+    const { teamId, ...input } = createBody.parse(req.body);
+    const reference = await repository.createRequest({
       ...input,
-      destination: input.location,
-      requestType: "team",
+      teamProfileId: teamId,
+      actor: actorOf(req),
     });
-    res.status(201).json({ data: serialize(row) });
+    const row = await load(reference);
+    notify.requestCreated(row);
+    res.status(201).json({ data: serializeRequest(row, { detail: true }) });
   } catch (error) {
     next(error);
   }
 }
-async function createPublicRequest(req, res, next) {
+
+async function updateRequest(req, res, next) {
   try {
-    const input = requestSchema.parse({
-      ...req.body,
-      location: req.body.destination || req.body.location,
-      people: Number(req.body.people || req.body.travellers),
+    const patch = schemas.updateRequest.parse(req.body);
+    await load(req.params.reference);
+    await repository.updateRequest(req.params.reference, patch, actorOf(req));
+    res.json({
+      data: serializeRequest(await load(req.params.reference), { detail: true }),
     });
-    const row = await repository.createRequest({
-      ...input,
-      destination: input.location,
-      requestType: "public",
-      reference: `SL-${Date.now().toString().slice(-8)}`,
-    });
-    res.status(201).json({ data: serialize(row) });
   } catch (error) {
     next(error);
   }
 }
-async function getPublicRequest(req, res, next) {
+
+async function move(req, res, to, reason) {
+  await repository.changeStatus({
+    reference: req.params.reference,
+    to,
+    reason,
+    actor: actorOf(req),
+    canMove,
+  });
+  const row = await load(req.params.reference);
+  notify.requestStatusChanged(row, to, reason);
+  res.json({ data: serializeRequest(row, { detail: true }) });
+}
+
+async function setStatus(req, res, next) {
   try {
-    const row = await repository.findByReference(req.params.id);
-    if (!row) return res.status(404).json({ message: "Request not found" });
-    res.json({ data: serialize(row) });
+    const { status, reason } = statusBody.parse(req.body);
+    if (status === "rejected") rejectBody.parse({ reason });
+    await move(req, res, status, reason);
   } catch (error) {
     next(error);
   }
 }
-async function getManagedRequest(req, res, next) {
-  return getPublicRequest(req, res, next);
+
+async function approveRequest(req, res, next) {
+  try {
+    await move(req, res, "confirmed", z.string().trim().max(1000).optional().parse(req.body?.note));
+  } catch (error) {
+    next(error);
+  }
 }
+
+async function rejectRequest(req, res, next) {
+  try {
+    const { reason } = rejectBody.parse(req.body);
+    await move(req, res, "rejected", reason);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteRequest(req, res, next) {
+  try {
+    await repository.softDelete(req.params.reference, actorOf(req));
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   listRequests,
+  getRequest,
   createRequest,
-  createPublicRequest,
-  getPublicRequest,
-  getManagedRequest,
+  updateRequest,
+  setStatus,
+  approveRequest,
+  rejectRequest,
+  deleteRequest,
 };

@@ -1,10 +1,17 @@
-const router = require('express').Router()
-const { listRequests, createRequest, createPublicRequest, getPublicRequest, getManagedRequest } = require('./logistics.controller')
-const { requireAuth } = require('../../shared/middleware/auth')
-router.post('/public-requests', createPublicRequest)
-router.get('/public-requests/:id', getPublicRequest)
-router.use(requireAuth)
-router.get('/requests', listRequests)
-router.get('/requests/:id', getManagedRequest)
-router.post('/requests', createRequest)
-module.exports = router
+// Manager-only request management, mounted at /api/logistics.
+// Teams use /api/team/requests instead (scoped to their own team).
+const router = require("express").Router();
+const controller = require("./logistics.controller");
+const { requireRole } = require("../../shared/middleware/auth");
+
+router.use(requireRole("manager"));
+router.get("/requests", controller.listRequests);
+router.post("/requests", controller.createRequest);
+router.get("/requests/:reference", controller.getRequest);
+router.patch("/requests/:reference", controller.updateRequest);
+router.post("/requests/:reference/status", controller.setStatus);
+router.post("/requests/:reference/approve", controller.approveRequest);
+router.post("/requests/:reference/reject", controller.rejectRequest);
+router.delete("/requests/:reference", controller.deleteRequest);
+
+module.exports = router;
