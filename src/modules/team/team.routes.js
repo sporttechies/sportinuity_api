@@ -1,5 +1,6 @@
 const express = require("express");
 const controller = require("./team.controller");
+const invoices = require("../invoices/invoices.controller");
 const { requireRole } = require("../../shared/middleware/auth");
 
 // /api/team/*  (team admins only)
@@ -11,6 +12,8 @@ teamRouter.get("/requests", controller.listRequests);
 teamRouter.post("/requests", controller.createRequest);
 teamRouter.get("/requests/:reference", controller.getRequest);
 teamRouter.post("/requests/:reference/cancel", controller.cancelRequest);
+teamRouter.get("/requests/:reference/invoices", invoices.teamForRequest);
+teamRouter.get("/invoices/:id/pdf", invoices.teamPdf);
 teamRouter.get("/draft", controller.getDraft);
 teamRouter.put("/draft", controller.saveDraft);
 teamRouter.delete("/draft", controller.deleteDraft);

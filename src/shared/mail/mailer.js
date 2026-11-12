@@ -45,4 +45,18 @@ function sendMailSafe(options) {
     .then(() => sleep(550));
 }
 
-module.exports = { sendMail, sendMailSafe };
+// Like sendMailSafe, but resolves with what happened so the caller can tell the
+// user: { status: "sent" } | { status: "skipped", reason } | { status: "failed", reason }.
+function sendMailTracked(options) {
+  const job = queue.then(() => sendMail(options));
+  queue = job.catch(() => {}).then(() => sleep(550));
+  return job.then(
+    (result) => (result?.skipped ? { status: "skipped", reason: result.skipped } : { status: "sent" }),
+    (error) => {
+      console.error(`[mail] "${options.subject}" failed:`, error.message);
+      return { status: "failed", reason: String(error.message).slice(0, 300) };
+    },
+  );
+}
+
+module.exports = { sendMail, sendMailSafe, sendMailTracked };

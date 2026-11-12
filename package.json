@@ -1,7 +1,7 @@
 {
   "name": "@sportinuity/api",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "commonjs",
   "scripts": {
     "dev": "node --watch src/app.js",
@@ -15,7 +15,9 @@
     "express": "^5.3.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "pdfkit": "^0.17.2",
     "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
     "zod": "^4.1.12"
   }
 }

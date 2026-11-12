@@ -28,6 +28,7 @@ app.use("/api/team", teamRouter);
 app.use("/api/teams", publicTeamRouter);
 app.use("/api/logistics", logisticsRoutes);
 app.use("/api/manager", managerRoutes);
+app.use("/api/invoices", require("./modules/invoices/invoices.routes"));
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
 

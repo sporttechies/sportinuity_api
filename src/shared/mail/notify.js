@@ -1,7 +1,7 @@
 // High-level notifications. Each function looks up recipients, builds the
 // email and queues it. Nothing here ever throws into the calling request.
 const { query } = require("../../config/db");
-const { sendMailSafe } = require("./mailer");
+const { sendMailSafe, sendMailTracked } = require("./mailer");
 const templates = require("./templates");
 
 async function managerEmails() {
@@ -60,7 +60,12 @@ function requestCreated(request) {
 
 // `byTeam` = the team itself made the change (e.g. cancelled), so managers are
 // told too, instead of the team being emailed about its own action twice.
-function requestStatusChanged(request, status, reason, { byTeam = false } = {}) {
+function requestStatusChanged(
+  request,
+  status,
+  reason,
+  { byTeam = false } = {},
+) {
   return run("requestStatusChanged", async () => {
     const team = await teamAdminEmails(request.team_profile_id);
     sendMailSafe({
@@ -75,7 +80,44 @@ function requestStatusChanged(request, status, reason, { byTeam = false } = {}) 
   });
 }
 
+// pdf: Buffer of the invoice. Goes to the team's admins and the request contact.
+// Resolves with { status: "sent" | "skipped" | "failed", reason?, recipients } so
+// the manager can see whether the team really got it.
+async function invoiceIssued(invoice, pdf, { resent = false } = {}) {
+  try {
+    const team = await teamAdminEmails(invoice.team_profile_id);
+    const recipients = [
+      ...new Set([...team, invoice.contact_email].filter(Boolean)),
+    ];
+    if (!recipients.length)
+      return {
+        status: "skipped",
+        reason: "No email address on file for this team",
+        recipients,
+      };
+    const result = await sendMailTracked({
+      to: recipients,
+      ...templates.invoiceIssued({ invoice, resent }),
+      attachments: [
+        {
+          filename: `invoice-${invoice.invoice_number}.pdf`,
+          content: pdf.toString("base64"),
+        },
+      ],
+    });
+    return { ...result, recipients };
+  } catch (error) {
+    console.error("[notify] invoiceIssued failed:", error.message);
+    return {
+      status: "failed",
+      reason: String(error.message).slice(0, 300),
+      recipients: [],
+    };
+  }
+}
+
 module.exports = {
+  invoiceIssued,
   managerEmails,
   teamAdminEmails,
   teamRegistered,

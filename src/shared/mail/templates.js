@@ -188,7 +188,29 @@ function managerCancelled({ request, reason }) {
   };
 }
 
+function invoiceIssued({ invoice, resent = false }) {
+  const link = `${publicUrl()}/manage-request/${encodeURIComponent(invoice.reference)}`;
+  const total = `${String(invoice.currency).trim()} ${Number(invoice.total).toFixed(2)}`;
+  return {
+    subject: `${resent ? "Reminder: invoice" : "Invoice"} ${invoice.invoice_number} for ${invoice.reference}`,
+    html: layout({
+      preheader: `Invoice ${invoice.invoice_number} - ${total}`,
+      heading: resent ? "Your invoice (copy)" : "Your invoice is ready",
+      bodyHtml: `<p>Please find your invoice attached as a PDF. You can also download it any time from your request page.</p>${detailsTable([
+        ["Invoice", invoice.invoice_number],
+        ["Request", invoice.reference],
+        ["Team", invoice.team_name],
+        ["Total", total],
+        ["Due date", invoice.due_date],
+      ])}`,
+      cta: { label: "View request", href: link },
+    }),
+    text: `Invoice ${invoice.invoice_number} (${total}) for request ${invoice.reference} is attached. ${link}`,
+  };
+}
+
 module.exports = {
+  invoiceIssued,
   esc,
   managerCancelled,
   teamWelcome,
