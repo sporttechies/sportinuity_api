@@ -80,6 +80,8 @@ const draft = z.object({
         documentNumber: draftText(60),
         dietary: draftText(300),
         category: draftText(10).default("adult"),
+        // set when the traveller was picked from the team's saved squad
+        playerId: z.string().max(40).optional(),
       }),
     )
     .max(300)

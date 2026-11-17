@@ -81,11 +81,10 @@ async function addPlayer(req, res, next) {
     const { limit } = await teamSport(teamId);
     const input = playerBody.parse(req.body);
     if (!input.photo) throw new HttpError(400, "Add the player's photo");
-    if (!input.document) throw new HttpError(400, "Add the birth certificate or passport page");
     if ((await repository.countPlayers(teamId)) >= limit)
       throw new HttpError(400, `A squad can have at most ${limit} players`);
     const photo = parsePhoto(input.photo);
-    const document = parseDocument(input.document);
+    const document = input.document ? parseDocument(input.document) : null;
     const id = await repository.newPlayerId();
     const photoUrl = await uploadPlayerPhoto(teamId, id, photo);
     await repository.insertPlayer(teamId, id, {
