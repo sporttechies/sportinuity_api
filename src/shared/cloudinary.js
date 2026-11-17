@@ -76,4 +76,34 @@ async function deleteLogo(teamId) {
   }
 }
 
-module.exports = { uploadLogo, deleteLogo, sign };
+/** Player photos: <folder>/<teamId>/<playerId>. Returns the https URL. */
+async function uploadPlayerPhoto(teamId, playerId, { buffer, mime }) {
+  const cfg = config();
+  if (!cfg) throw new HttpError(503, "Image uploads aren't configured on the server");
+  const result = await call(
+    cfg,
+    "upload",
+    {
+      public_id: `sportinuity/player-photos/${teamId}/${playerId}`,
+      overwrite: "true",
+      invalidate: "true",
+    },
+    { file: `data:${mime};base64,${buffer.toString("base64")}` },
+  );
+  return result.secure_url;
+}
+
+async function deletePlayerPhoto(teamId, playerId) {
+  const cfg = config();
+  if (!cfg) return;
+  try {
+    await call(cfg, "destroy", {
+      public_id: `sportinuity/player-photos/${teamId}/${playerId}`,
+      invalidate: "true",
+    });
+  } catch (error) {
+    console.error("[cloudinary] player photo delete failed:", error.message);
+  }
+}
+
+module.exports = { uploadLogo, deleteLogo, uploadPlayerPhoto, deletePlayerPhoto, sign };

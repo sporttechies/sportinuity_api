@@ -19,13 +19,14 @@ app.use(
   }),
 );
 // 1 MB: team logos arrive as base64 (the frontends shrink them to ~256px first).
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "3mb" }));
 app.get("/api/health", (_req, res) =>
   res.json({ service: "sportinuity-api", status: "ok" }),
 );
 app.use("/api/auth", authRoutes);
 app.use("/api/team", teamRouter);
 app.use("/api/teams", publicTeamRouter);
+app.get("/api/registration-options", require("./modules/editions/editions.controller").options);
 app.use("/api/logistics", logisticsRoutes);
 app.use("/api/manager", managerRoutes);
 app.use("/api/invoices", require("./modules/invoices/invoices.routes"));

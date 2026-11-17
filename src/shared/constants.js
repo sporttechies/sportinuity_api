@@ -18,6 +18,37 @@ const SPORTS = [
   "Other",
 ];
 
+// Sports that register a squad (the roster step). Value = maximum players.
+const TEAM_SPORT_LIMITS = {
+  Football: 22,
+  Rugby: 30,
+  Basketball: 15,
+  Netball: 12,
+  Volleyball: 14,
+  Handball: 16,
+  Hockey: 18,
+  Cricket: 15,
+};
+
+const AGE_CATEGORIES = [
+  "Under 5",
+  "Under 7",
+  "Under 9 Boys",
+  "Under 9 Girls",
+  "Under 11 Boys",
+  "Under 11 Girls",
+  "Under 13 Boys",
+  "Under 13 Girls",
+  "Under 15 Boys",
+  "Under 15 Girls",
+  "Under 17 Boys",
+  "Under 17 Girls",
+  "Under 20 Boys",
+  "Under 20 Girls",
+  "Open Men",
+  "Open Women",
+];
+
 const REQUEST_STATUSES = [
   "new",
   "in_review",
@@ -44,6 +75,8 @@ const TEAM_CANCELLABLE = ["new", "in_review", "quoted"];
 
 module.exports = {
   SPORTS,
+  TEAM_SPORT_LIMITS,
+  AGE_CATEGORIES,
   REQUEST_STATUSES,
   MANAGER_TRANSITIONS,
   TEAM_CANCELLABLE,

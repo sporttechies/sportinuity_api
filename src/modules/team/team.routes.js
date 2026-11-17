@@ -1,5 +1,6 @@
 const express = require("express");
 const controller = require("./team.controller");
+const roster = require("./roster.controller");
 const invoices = require("../invoices/invoices.controller");
 const { requireRole } = require("../../shared/middleware/auth");
 
@@ -8,6 +9,12 @@ const teamRouter = express.Router();
 teamRouter.use(requireRole("team_admin"));
 teamRouter.get("/profile", controller.getProfile);
 teamRouter.patch("/profile", controller.updateProfile);
+teamRouter.get("/players", roster.getRoster);
+teamRouter.post("/players", roster.addPlayer);
+teamRouter.patch("/players/:id", roster.updatePlayer);
+teamRouter.delete("/players/:id", roster.removePlayer);
+teamRouter.get("/players/:id/document", roster.teamDocument);
+teamRouter.post("/roster/submit", roster.submit);
 teamRouter.get("/requests", controller.listRequests);
 teamRouter.post("/requests", controller.createRequest);
 teamRouter.get("/requests/:reference", controller.getRequest);

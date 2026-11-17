@@ -47,15 +47,25 @@ async function createTeamAdmin({
   sport,
   country,
   city,
+  editionId,
+  ageCategory,
+  coachName,
+  coachEmail,
+  coachPhone,
 }) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const team = await client.query(
-      `INSERT INTO team_profiles (name, sport, country, city)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO team_profiles
+         (name, sport, country, city, edition_id, age_category, coach_name, coach_email, coach_phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, name, sport, country, city, logo_updated_at, logo_url`,
-      [teamName, sport, country, city || null],
+      [
+        teamName, sport, country, city || null,
+        editionId || null, ageCategory || null,
+        coachName || null, coachEmail || null, coachPhone || null,
+      ],
     );
     const account = await client.query(
       `INSERT INTO auth_accounts (email, display_name, password_hash, account_type)

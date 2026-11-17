@@ -9,7 +9,12 @@ const notify = require("../../shared/mail/notify");
 const { HttpError } = require("../../shared/http-error");
 const { logoPath } = require("../../shared/team-logo");
 const { storeLogo } = require("../../shared/store-logo");
-const { SPORTS, TEAM_CANCELLABLE } = require("../../shared/constants");
+const {
+  SPORTS,
+  TEAM_CANCELLABLE,
+  TEAM_SPORT_LIMITS,
+} = require("../../shared/constants");
+const { teamDetails, ensureEditionOpen } = require("./team-details");
 
 const actorOf = (req) => ({ id: req.user.id, role: "team_admin" });
 
@@ -25,6 +30,7 @@ const profileBody = z.object({
   city: z.string().trim().max(120).nullish(),
   adminName: z.string().trim().min(2).max(120).optional(),
   logo: z.string().max(450_000).nullable().optional(),
+  ...teamDetails,
 });
 
 function serializeTeam(team) {
@@ -35,6 +41,17 @@ function serializeTeam(team) {
     country: team.country,
     city: team.city,
     logoPath: logoPath(team.id, team.logo_updated_at, team.logo_url),
+    isTeamSport: team.sport in TEAM_SPORT_LIMITS,
+    maxPlayers: TEAM_SPORT_LIMITS[team.sport] ?? null,
+    editionId: team.edition_id ?? null,
+    edition: team.edition_name ?? null,
+    ageCategory: team.age_category ?? null,
+    coach: {
+      name: team.coach_name ?? null,
+      email: team.coach_email ?? null,
+      phone: team.coach_phone ?? null,
+    },
+    rosterSubmittedAt: team.roster_submitted_at ?? null,
     createdAt: team.created_at,
     updatedAt: team.updated_at,
   };
@@ -73,6 +90,12 @@ async function updateProfile(req, res, next) {
       adminAccountId: req.user.id,
     };
     patch.logo = await storeLogo(req.user.teamProfileId, input.logo);
+    patch.editionId = input.editionId;
+    patch.ageCategory = input.ageCategory;
+    patch.coachName = input.coachName;
+    patch.coachEmail = input.coachEmail;
+    patch.coachPhone = input.coachPhone;
+    await ensureEditionOpen(input.editionId);
     await repository.updateTeam(req.user.teamProfileId, patch);
     const fresh = await profileResponse({
       user: { ...req.user, name: input.adminName ?? req.user.name },

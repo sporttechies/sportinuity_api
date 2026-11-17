@@ -6,6 +6,7 @@ const { signToken } = require("../../shared/middleware/auth");
 const { HttpError } = require("../../shared/http-error");
 const { SPORTS } = require("../../shared/constants");
 const { logoPath } = require("../../shared/team-logo");
+const { teamDetails, ensureEditionOpen } = require("../team/team-details");
 
 const optionalText = (max) =>
   z
@@ -27,6 +28,7 @@ const registration = z.object({
     .toUpperCase()
     .regex(/^[A-Z]{2}$/, "Choose a country"),
   city: optionalText(120),
+  ...teamDetails,
 });
 const loginInput = z.object({
   email: z.string().trim().email(),
@@ -79,6 +81,7 @@ async function registerTeam(req, res, next) {
   try {
     const input = registration.parse(req.body);
     const email = input.email.toLowerCase();
+    await ensureEditionOpen(input.editionId);
     if (await repository.emailInUse(email))
       throw new HttpError(409, "An account already exists for this email");
     if (await repository.teamNameInUse(input.teamName))

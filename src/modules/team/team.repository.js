@@ -1,11 +1,16 @@
 const { pool, query } = require("../../config/db");
 const { HttpError } = require("../../shared/http-error");
 
-const TEAM_COLUMNS = `id, name, sport, country, city, logo_updated_at, logo_url, created_at, updated_at`;
+const TEAM_COLUMNS = `t.id, t.name, t.sport, t.country, t.city, t.logo_updated_at, t.logo_url,
+  t.created_at, t.updated_at, t.edition_id, e.name AS edition_name, t.age_category,
+  t.coach_name, t.coach_email, t.coach_phone, t.roster_consent_at, t.roster_submitted_at`;
 
 async function getTeam(teamId) {
   const { rows } = await query(
-    `SELECT ${TEAM_COLUMNS} FROM team_profiles WHERE id = $1`,
+    `SELECT ${TEAM_COLUMNS}
+       FROM team_profiles t
+       LEFT JOIN tournament_editions e ON e.id = t.edition_id
+      WHERE t.id = $1`,
     [teamId],
   );
   return rows[0];
@@ -46,6 +51,11 @@ async function updateTeam(teamId, patch) {
     if (patch.sport !== undefined) set("sport = ?", patch.sport);
     if (patch.country !== undefined) set("country = ?", patch.country);
     if (patch.city !== undefined) set("city = ?", patch.city || null);
+    if (patch.editionId !== undefined) set("edition_id = ?", patch.editionId);
+    if (patch.ageCategory !== undefined) set("age_category = ?", patch.ageCategory);
+    if (patch.coachName !== undefined) set("coach_name = ?", patch.coachName);
+    if (patch.coachEmail !== undefined) set("coach_email = ?", patch.coachEmail);
+    if (patch.coachPhone !== undefined) set("coach_phone = ?", patch.coachPhone);
     if (patch.logo === null) {
       sets.push("logo_data = NULL", "logo_mime = NULL", "logo_url = NULL", "logo_updated_at = NULL");
     } else if (patch.logo) {
