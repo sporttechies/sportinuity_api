@@ -42,6 +42,8 @@ function serializeRequest(row, { detail = false, audience = "manager" } = {}) {
       dietary: t.dietary_needs,
     }));
     out.events = (row.events || [])
+      // Supplier quotations are internal: teams never see them in the history.
+      .filter((e) => audience === "manager" || !String(e.action).startsWith("quote_"))
       .filter((e) => audience === "manager" || e.action !== "edited" || e.actor_role !== "manager")
       .map((e) => ({
         id: e.id,

@@ -26,10 +26,16 @@ app.get("/api/health", (_req, res) =>
 app.use("/api/auth", authRoutes);
 app.use("/api/team", teamRouter);
 app.use("/api/teams", publicTeamRouter);
-app.get("/api/registration-options", require("./modules/editions/editions.controller").options);
+app.get(
+  "/api/registration-options",
+  require("./modules/editions/editions.controller").options,
+);
 app.use("/api/logistics", logisticsRoutes);
 app.use("/api/manager", managerRoutes);
 app.use("/api/invoices", require("./modules/invoices/invoices.routes"));
+app.use("/api/suppliers", require("./modules/suppliers/suppliers.routes"));
+app.use("/api/quotations", require("./modules/suppliers/quotations.routes"));
+app.use("/api/rooming", require("./modules/rooming/rooming.routes"));
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
 
