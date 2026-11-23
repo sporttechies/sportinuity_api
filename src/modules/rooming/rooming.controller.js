@@ -157,6 +157,28 @@ const byRoom = (req) => async (client) => {
   return rows[0];
 };
 
+async function pdf(req, res, next) {
+  try {
+    const request = await requestByReference(req.params.reference);
+    const team = await query(
+      `SELECT tp.name FROM logistics_requests lr LEFT JOIN team_profiles tp ON tp.id = lr.team_profile_id WHERE lr.id = $1`,
+      [request.id],
+    );
+    // eslint-disable-next-line global-require
+    const { renderRoomingList } = require("./rooming.pdf");
+    const buffer = await renderRoomingList(await loadList(request), { teamName: team.rows[0]?.name });
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="rooming-${request.reference}.pdf"`,
+      "Cache-Control": "private, no-store",
+      "Content-Length": buffer.length,
+    });
+    res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function get(req, res, next) {
   try {
     const request = await requestByReference(req.params.reference);
@@ -317,6 +339,6 @@ async function reopen(req, res, next) {
 }
 
 module.exports = {
-  get, createRooms, updateRoom, deleteRoom, setOccupants, suggest, clear, updateNotes,
+  get, pdf, createRooms, updateRoom, deleteRoom, setOccupants, suggest, clear, updateNotes,
   finalize, reopen, loadList, requestByReference,
 };

@@ -36,6 +36,7 @@ app.use("/api/invoices", require("./modules/invoices/invoices.routes"));
 app.use("/api/suppliers", require("./modules/suppliers/suppliers.routes"));
 app.use("/api/quotations", require("./modules/suppliers/quotations.routes"));
 app.use("/api/rooming", require("./modules/rooming/rooming.routes"));
+app.use("/api/meals", require("./modules/meals/meals.routes"));
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
 

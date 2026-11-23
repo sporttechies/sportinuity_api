@@ -8,6 +8,7 @@ router.patch("/rooms/:id", c.updateRoom);
 router.delete("/rooms/:id", c.deleteRoom);
 router.put("/rooms/:id/occupants", c.setOccupants);
 router.get("/:reference", c.get);
+router.get("/:reference/pdf", c.pdf);
 router.patch("/:reference", c.updateNotes);
 router.post("/:reference/rooms", c.createRooms);
 router.post("/:reference/suggest", c.suggest);

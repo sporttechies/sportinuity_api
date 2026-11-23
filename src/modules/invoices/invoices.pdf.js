@@ -26,6 +26,29 @@ const dateText = (value) => {
 // The logo is read once. Put it at src/assets/logo.png (or .jpg), or point
 // INVOICE_LOGO_PATH at it. Without one, the company name is printed instead.
 let logoCache;
+let logoPromise;
+// Big logo files are decoded in full by pdfkit (a 4000px PNG can take 100MB+ of
+// RAM per invoice and crash a small server), so it is shrunk once, and kept.
+async function prepareLogo() {
+  if (!logoPromise) {
+    logoPromise = (async () => {
+      const raw = loadLogo();
+      if (!raw) return;
+      try {
+        // eslint-disable-next-line global-require
+        const sharp = require("sharp");
+        logoCache = await sharp(raw, { limitInputPixels: 50_000_000 })
+          .resize({ width: 600, height: 200, fit: "inside", withoutEnlargement: true })
+          .png({ compressionLevel: 9 })
+          .toBuffer();
+      } catch (err) {
+        console.warn("Invoice logo not resized (is sharp installed?):", err.message);
+        if (raw.length > 400 * 1024) logoCache = null; // too big to risk; print the name instead
+      }
+    })();
+  }
+  return logoPromise;
+}
 function loadLogo() {
   if (logoCache !== undefined) return logoCache;
   const dir = path.join(__dirname, "../../assets");
@@ -44,7 +67,8 @@ function loadLogo() {
 
 const STAMPS = { draft: "DRAFT", void: "VOID", paid: "PAID" };
 
-function renderInvoice(invoice, liveSettings) {
+async function renderInvoice(invoice, liveSettings) {
+  await prepareLogo();
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
@@ -252,4 +276,4 @@ function renderInvoice(invoice, liveSettings) {
   });
 }
 
-module.exports = { renderInvoice, money };
+module.exports = { renderInvoice, money, prepareLogo, loadLogo };

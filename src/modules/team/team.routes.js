@@ -1,6 +1,8 @@
 const express = require("express");
 const controller = require("./team.controller");
 const roster = require("./roster.controller");
+const meals = require("../meals/meals.team.controller");
+const rooming = require("../rooming/rooming.team.controller");
 const invoices = require("../invoices/invoices.controller");
 const { requireRole } = require("../../shared/middleware/auth");
 
@@ -21,6 +23,11 @@ teamRouter.get("/requests/:reference", controller.getRequest);
 teamRouter.post("/requests/:reference/cancel", controller.cancelRequest);
 teamRouter.get("/requests/:reference/invoices", invoices.teamForRequest);
 teamRouter.get("/invoices/:id/pdf", invoices.teamPdf);
+teamRouter.get("/requests/:reference/rooming", rooming.get);
+teamRouter.put("/requests/:reference/roommates", rooming.saveRoommates);
+teamRouter.get("/requests/:reference/rooming/pdf", rooming.pdf);
+teamRouter.get("/requests/:reference/meals", meals.get);
+teamRouter.get("/requests/:reference/meals/pdf", meals.pdf);
 teamRouter.get("/draft", controller.getDraft);
 teamRouter.put("/draft", controller.saveDraft);
 teamRouter.delete("/draft", controller.deleteDraft);
