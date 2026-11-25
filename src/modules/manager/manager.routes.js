@@ -14,6 +14,7 @@ router.post("/teams/:id/status", controller.setTeamStatus);
 router.delete("/teams/:id", controller.deleteTeam);
 router.get("/teams/:id/players", roster.managerRoster);
 router.get("/teams/:id/players/:playerId/document", roster.managerDocument);
+router.post("/teams/:id/roster/review", roster.reviewRoster);
 router.get("/editions", editions.list);
 router.post("/editions", editions.create);
 router.patch("/editions/:id", editions.update);

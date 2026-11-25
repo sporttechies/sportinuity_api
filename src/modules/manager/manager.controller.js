@@ -4,6 +4,7 @@ const teamRepository = require("../team/team.repository");
 const logistics = require("../logistics/logistics.repository");
 const { serializeRequest } = require("../logistics/logistics.serializer");
 const { serializeTeam } = require("../team/team.controller");
+const { query } = require("../../config/db");
 const { HttpError } = require("../../shared/http-error");
 const { logoPath } = require("../../shared/team-logo");
 const { storeLogo } = require("../../shared/store-logo");
@@ -27,6 +28,7 @@ async function dashboard(_req, res, next) {
     const d = await logistics.dashboard();
     const by = d.byStatus;
     const n = (status) => by[status] || 0;
+    const { rows: review } = await query(`SELECT count(*)::int AS n FROM team_profiles WHERE roster_status = 'submitted'`);
     res.json({
       data: {
         byStatus: by,
@@ -37,6 +39,7 @@ async function dashboard(_req, res, next) {
           confirmed: n("confirmed"),
           travellers: d.travellers,
           teams: d.teams,
+          rostersToReview: review[0].n,
         },
         recent: d.recent.map((row) => serializeRequest(row)),
         upcoming: d.upcoming.map((row) => serializeRequest(row)),
@@ -64,6 +67,7 @@ async function listTeams(req, res, next) {
         accountStatus: row.account_status || "active",
         requestCount: row.request_count,
         pendingCount: row.pending_count,
+        rosterStatus: row.roster_status,
       })),
     });
   } catch (error) {

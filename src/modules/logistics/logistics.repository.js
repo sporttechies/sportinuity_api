@@ -11,7 +11,11 @@ const COLUMNS = `
   lr.departure_date::text AS departure_date, lr.return_date::text AS return_date,
   lr.traveller_count, lr.status, lr.rejection_reason, lr.manager_notes,
   lr.contact_name, lr.contact_email, lr.contact_phone,
-  lr.created_at, lr.updated_at, lr.reviewed_at`;
+  lr.created_at, lr.updated_at, lr.reviewed_at,
+  (SELECT COALESCE(json_agg(json_build_object('id', ra.manager_account_id, 'name', ma.display_name, 'role', ra.role)
+            ORDER BY (ra.role = 'lead') DESC, ra.created_at), '[]'::json)
+     FROM request_assignments ra JOIN auth_accounts ma ON ma.id = ra.manager_account_id
+    WHERE ra.logistics_request_id = lr.id) AS assignees`;
 const FROM_SQL = `FROM logistics_requests lr LEFT JOIN team_profiles tp ON tp.id = lr.team_profile_id`;
 
 const escapeLike = (value) => value.replace(/[\\%_]/g, (char) => `\\${char}`);
@@ -23,8 +27,7 @@ function buildFilters(options) {
     values.push(value);
     where.push(sql.replaceAll("?", `$${values.length}`));
   };
-  if (options.teamProfileId)
-    add("lr.team_profile_id = ?", options.teamProfileId);
+  if (options.teamProfileId) add("lr.team_profile_id = ?", options.teamProfileId);
   if (options.status) {
     const statuses = String(options.status).split(",").filter(Boolean);
     if (statuses.length) add("lr.status = ANY(?::text[])", statuses);
@@ -36,12 +39,13 @@ function buildFilters(options) {
       `%${escapeLike(String(options.q).trim())}%`,
     );
   }
+  if (options.assignee === "none")
+    where.push("NOT EXISTS (SELECT 1 FROM request_assignments ra WHERE ra.logistics_request_id = lr.id)");
+  else if (options.assignee)
+    add("EXISTS (SELECT 1 FROM request_assignments ra WHERE ra.logistics_request_id = lr.id AND ra.manager_account_id = ?::uuid)", options.assignee);
   if (options.dateTo) add("lr.departure_date <= ?::date", options.dateTo);
   if (options.dateFrom)
-    add(
-      "COALESCE(lr.return_date, lr.departure_date) >= ?::date",
-      options.dateFrom,
-    );
+    add("COALESCE(lr.return_date, lr.departure_date) >= ?::date", options.dateFrom);
   return { where: where.join(" AND "), values };
 }
 
@@ -102,10 +106,7 @@ async function findByReference(reference, { teamProfileId } = {}) {
   return { ...row, travellers: travellers.rows, events: events.rows };
 }
 
-async function addEvent(
-  client,
-  { requestId, actor, action, fromStatus, toStatus, note },
-) {
+async function addEvent(client, { requestId, actor, action, fromStatus, toStatus, note }) {
   await client.query(
     `INSERT INTO request_events
        (logistics_request_id, actor_account_id, actor_role, action, from_status, to_status, note)
@@ -151,10 +152,7 @@ async function insertTravellers(client, requestId, teamProfileId, travellers) {
 
 function assertDates(departure, returnDate) {
   if (departure && returnDate && returnDate < departure)
-    throw new HttpError(
-      400,
-      "The return date cannot be before the departure date",
-    );
+    throw new HttpError(400, "The return date cannot be before the departure date");
 }
 
 async function insertRequest(input) {
@@ -189,12 +187,7 @@ async function insertRequest(input) {
         input.createdByTeamAdminId || null,
       ],
     );
-    await insertTravellers(
-      client,
-      rows[0].id,
-      input.teamProfileId,
-      input.travellers,
-    );
+    await insertTravellers(client, rows[0].id, input.teamProfileId, input.travellers);
     await addEvent(client, {
       requestId: rows[0].id,
       actor: input.actor,
@@ -219,8 +212,7 @@ async function createRequest(input) {
     try {
       return await insertRequest(input);
     } catch (error) {
-      if (error.code === "23505" && /reference/.test(error.constraint || ""))
-        continue;
+      if (error.code === "23505" && /reference/.test(error.constraint || "")) continue;
       throw error;
     }
   }
@@ -255,29 +247,19 @@ async function updateRequest(reference, patch, actor) {
     if (patch.event !== undefined) set("event_name", patch.event);
     if (patch.from !== undefined) set("origin", patch.from || null);
     if (patch.location !== undefined) set("destination", patch.location);
-    if (patch.departure !== undefined)
-      set("departure_date", patch.departure || null);
-    if (patch.returnDate !== undefined)
-      set("return_date", patch.returnDate || null);
-    if (patch.managerNotes !== undefined)
-      set("manager_notes", patch.managerNotes || null);
+    if (patch.departure !== undefined) set("departure_date", patch.departure || null);
+    if (patch.returnDate !== undefined) set("return_date", patch.returnDate || null);
+    if (patch.managerNotes !== undefined) set("manager_notes", patch.managerNotes || null);
     if (patch.contact) {
-      if (patch.contact.name !== undefined)
-        set("contact_name", patch.contact.name || null);
-      if (patch.contact.email !== undefined)
-        set("contact_email", patch.contact.email || null);
-      if (patch.contact.phone !== undefined)
-        set("contact_phone", patch.contact.phone || null);
+      if (patch.contact.name !== undefined) set("contact_name", patch.contact.name || null);
+      if (patch.contact.email !== undefined) set("contact_email", patch.contact.email || null);
+      if (patch.contact.phone !== undefined) set("contact_phone", patch.contact.phone || null);
     }
     if (patch.travellers) set("traveller_count", patch.travellers.length);
 
     assertDates(
-      patch.departure !== undefined
-        ? patch.departure || null
-        : row.departure_date,
-      patch.returnDate !== undefined
-        ? patch.returnDate || null
-        : row.return_date,
+      patch.departure !== undefined ? patch.departure || null : row.departure_date,
+      patch.returnDate !== undefined ? patch.returnDate || null : row.return_date,
     );
 
     if (sets.length) {
@@ -287,16 +269,8 @@ async function updateRequest(reference, patch, actor) {
       );
     }
     if (patch.travellers) {
-      await client.query(
-        `DELETE FROM request_travellers WHERE logistics_request_id = $1`,
-        [row.id],
-      );
-      await insertTravellers(
-        client,
-        row.id,
-        row.team_profile_id,
-        patch.travellers,
-      );
+      await client.query(`DELETE FROM request_travellers WHERE logistics_request_id = $1`, [row.id]);
+      await insertTravellers(client, row.id, row.team_profile_id, patch.travellers);
     }
     await addEvent(client, {
       requestId: row.id,
@@ -314,14 +288,7 @@ async function updateRequest(reference, patch, actor) {
 }
 
 // `canMove(from, to)` decides whether the transition is allowed for the caller.
-async function changeStatus({
-  reference,
-  teamProfileId,
-  to,
-  reason,
-  actor,
-  canMove,
-}) {
+async function changeStatus({ reference, teamProfileId, to, reason, actor, canMove }) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -338,11 +305,7 @@ async function changeStatus({
     );
     const current = found.rows[0];
     if (!current) throw new HttpError(404, "Request not found");
-    if (current.status === to)
-      throw new HttpError(
-        409,
-        `This request is already ${to.replace("_", " ")}`,
-      );
+    if (current.status === to) throw new HttpError(409, `This request is already ${to.replace("_", " ")}`);
     if (!canMove(current.status, to))
       throw new HttpError(
         409,
@@ -357,13 +320,7 @@ async function changeStatus({
               reviewed_at = CASE WHEN $4 THEN now() ELSE reviewed_at END,
               updated_at = now()
         WHERE id = $1`,
-      [
-        current.id,
-        to,
-        to === "rejected" ? reason || null : null,
-        isManager,
-        actor.id,
-      ],
+      [current.id, to, to === "rejected" ? reason || null : null, isManager, actor.id],
     );
     await addEvent(client, {
       requestId: current.id,

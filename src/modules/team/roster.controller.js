@@ -8,6 +8,7 @@ const { HttpError } = require("../../shared/http-error");
 const { parseLogoDataUrl } = require("../../shared/logo-upload");
 const { uploadPlayerPhoto, deletePlayerPhoto } = require("../../shared/cloudinary");
 const { TEAM_SPORT_LIMITS } = require("../../shared/constants");
+const notify = require("../../shared/mail/notify");
 
 const PHOTO_MAX = 400 * 1024;
 const DOCUMENT_MAX = 1500 * 1024;
@@ -61,6 +62,9 @@ async function getRoster(req, res, next) {
         limit,
         players: players.map(serializePlayer),
         submittedAt: team.roster_submitted_at,
+        status: team.roster_status,
+        reviewNote: team.roster_review_note,
+        reviewedAt: team.roster_reviewed_at,
       },
     });
   } catch (error) {
@@ -95,6 +99,7 @@ async function addPlayer(req, res, next) {
       photoUrl,
       document,
     });
+    await repository.markEdited(teamId);
     res.status(201).json({ data: serializePlayer(await repository.getPlayer(teamId, id)) });
   } catch (error) {
     next(error);
@@ -117,6 +122,7 @@ async function updatePlayer(req, res, next) {
     if (input.photo) patch.photoUrl = await uploadPlayerPhoto(teamId, id, parsePhoto(input.photo));
     if (input.document) patch.document = parseDocument(input.document);
     await repository.updatePlayer(teamId, id, patch);
+    await repository.markEdited(teamId);
     res.json({ data: serializePlayer(await repository.getPlayer(teamId, id)) });
   } catch (error) {
     next(error);
@@ -128,6 +134,7 @@ async function removePlayer(req, res, next) {
     const teamId = req.user.teamProfileId;
     const id = z.uuid().parse(req.params.id);
     if (!(await repository.deletePlayer(teamId, id))) throw new HttpError(404, "Player not found");
+    await repository.markEdited(teamId);
     deletePlayerPhoto(teamId, id);
     res.status(204).end();
   } catch (error) {
@@ -151,8 +158,12 @@ async function submit(req, res, next) {
       throw new HttpError(400, `Complete your team details first: ${missing.join(", ")}`);
     if ((await repository.countPlayers(teamId)) < 1)
       throw new HttpError(400, "Add at least one player before submitting");
+    if (team.roster_status === "submitted")
+      throw new HttpError(409, "Your squad is already with us for review");
     await repository.submitRoster(teamId);
-    res.json({ data: { submittedAt: (await teamRepository.getTeam(teamId)).roster_submitted_at } });
+    const after = await teamRepository.getTeam(teamId);
+    notify.rosterSubmitted({ team: after, players: await repository.countPlayers(teamId) });
+    res.json({ data: { submittedAt: after.roster_submitted_at, status: after.roster_status } });
   } catch (error) {
     next(error);
   }
@@ -179,7 +190,7 @@ async function teamDocument(req, res, next) {
   }
 }
 
-// ---- manager side (read only) -------------------------------------------
+// ---- manager side -------------------------------------------
 async function managerRoster(req, res, next) {
   try {
     const teamId = z.uuid().parse(req.params.id);
@@ -191,6 +202,9 @@ async function managerRoster(req, res, next) {
         limit: TEAM_SPORT_LIMITS[team.sport] ?? null,
         players: players.map(serializePlayer),
         submittedAt: team.roster_submitted_at,
+        status: team.roster_status,
+        reviewNote: team.roster_review_note,
+        reviewedAt: team.roster_reviewed_at,
       },
     });
   } catch (error) {
@@ -210,7 +224,40 @@ async function managerDocument(req, res, next) {
   }
 }
 
+const reviewBody = z
+  .object({
+    decision: z.enum(["approve", "request_changes"], { error: "Choose approve or request changes" }),
+    note: z.preprocess(blank, z.string().trim().max(1000).nullable().optional()),
+  })
+  .refine((v) => v.decision === "approve" || (v.note && v.note.length >= 3), {
+    message: "Tell the team what needs to change",
+    path: ["note"],
+  });
+
+async function reviewRoster(req, res, next) {
+  try {
+    const teamId = z.uuid().parse(req.params.id);
+    const team = await teamRepository.getTeam(teamId);
+    if (!team) throw new HttpError(404, "Team not found");
+    const input = reviewBody.parse(req.body);
+    const ok = await repository.setReview(teamId, {
+      status: input.decision === "approve" ? "approved" : "changes_requested",
+      note: input.note ?? null,
+      reviewerId: req.user.id,
+    });
+    if (!ok) throw new HttpError(409, "This squad isn't waiting for review");
+    const after = await teamRepository.getTeam(teamId);
+    notify.rosterReviewed({ team: after, approved: input.decision === "approve", note: input.note });
+    res.json({
+      data: { status: after.roster_status, reviewNote: after.roster_review_note, reviewedAt: after.roster_reviewed_at },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
+  reviewRoster,
   getRoster, addPlayer, updatePlayer, removePlayer, submit, teamDocument,
   managerRoster, managerDocument,
 };

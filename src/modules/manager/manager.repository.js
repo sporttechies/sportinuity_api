@@ -7,7 +7,7 @@ async function listTeams(q) {
   const pattern = q ? `%${escapeLike(String(q).trim())}%` : null;
   const { rows } = await query(
     `SELECT tp.id, tp.name, tp.sport, tp.country, tp.city, tp.logo_updated_at, tp.logo_url,
-            tp.created_at, tp.updated_at,
+            tp.created_at, tp.updated_at, tp.roster_status,
             adm.name AS admin_name, adm.email AS admin_email,
             adm.account_status,
             (SELECT count(*)::int FROM logistics_requests lr

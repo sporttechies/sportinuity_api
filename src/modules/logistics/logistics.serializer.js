@@ -29,7 +29,10 @@ function serializeRequest(row, { detail = false, audience = "manager" } = {}) {
       phone: row.contact_phone,
     },
   };
-  if (audience === "manager") out.managerNotes = row.manager_notes;
+  if (audience === "manager") {
+    out.managerNotes = row.manager_notes;
+    out.assignees = row.assignees || [];
+  }
   if (detail) {
     out.travellers = (row.travellers || []).map((t) => ({
       id: t.id,
@@ -43,7 +46,7 @@ function serializeRequest(row, { detail = false, audience = "manager" } = {}) {
     }));
     out.events = (row.events || [])
       // Supplier quotations are internal: teams never see them in the history.
-      .filter((e) => audience === "manager" || !String(e.action).startsWith("quote_"))
+      .filter((e) => audience === "manager" || !/^(quote_|staff_)/.test(String(e.action)))
       .filter((e) => audience === "manager" || e.action !== "edited" || e.actor_role !== "manager")
       .map((e) => ({
         id: e.id,

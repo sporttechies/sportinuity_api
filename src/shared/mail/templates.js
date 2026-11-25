@@ -209,7 +209,88 @@ function invoiceIssued({ invoice, resent = false }) {
   };
 }
 
+function newMessage({ request, body, byTeam, senderName }) {
+  const label = request.team_name || request.request_team_name || "the team";
+  const href = byTeam
+    ? `${managerUrl()}/requests/${encodeURIComponent(request.reference)}`
+    : `${publicUrl()}/manage-request/${encodeURIComponent(request.reference)}`;
+  const from = byTeam ? `${senderName || "A team member"} (${label})` : "the Sportinuity team";
+  const quoted = `<blockquote style="margin:16px 0;padding:12px 16px;border-left:4px solid #007cc2;background:#f4f7f8;white-space:pre-wrap">${esc(body.length > 600 ? body.slice(0, 600) + "…" : body)}</blockquote>`;
+  return {
+    subject: byTeam ? `New message on ${request.reference} - ${label}` : `New message about your request ${request.reference}`,
+    html: layout({
+      preheader: body.slice(0, 90),
+      heading: "You have a new message",
+      bodyHtml: `<p style="margin:0">Message from ${esc(from)} about <strong>${esc(request.reference)}</strong>${request.event_name ? ` (${esc(request.event_name)})` : ""}:</p>${quoted}`,
+      cta: { label: "Open and reply", href },
+    }),
+    text: `New message about ${request.reference} from ${from}: ${body.slice(0, 600)}\n${href}`,
+  };
+}
+
+function staffAssigned({ request, name, role, note, by }) {
+  const href = `${managerUrl()}/requests/${encodeURIComponent(request.reference)}`;
+  const label = String(role).replace("_", " ");
+  return {
+    subject: `You're assigned to ${request.reference} (${label})`,
+    html: layout({
+      preheader: `${by || "A colleague"} assigned you to ${request.reference}.`,
+      heading: "You've been assigned a request",
+      bodyHtml: `<p style="margin:0">Hi ${esc(name)}, ${esc(by || "a colleague")} assigned you to this request as <strong>${esc(label)}</strong>.</p>${detailsTable([
+        ["Reference", request.reference],
+        ["Team", request.team_name],
+        ["Event", request.event_name],
+        ["Note", note],
+      ])}`,
+      cta: { label: "Open request", href },
+    }),
+    text: `You're assigned to ${request.reference} as ${label}. ${href}`,
+  };
+}
+
+function managerRosterSubmitted({ team, players }) {
+  const href = `${managerUrl()}/teams/${encodeURIComponent(team.id)}`;
+  return {
+    subject: `Squad submitted for review - ${team.name}`,
+    html: layout({
+      preheader: `${team.name} submitted ${players} player${players === 1 ? "" : "s"}.`,
+      heading: "A squad is ready for review",
+      bodyHtml: detailsTable([
+        ["Team", team.name],
+        ["Sport", team.sport],
+        ["Age category", team.age_category],
+        ["Coach", team.coach_name],
+        ["Players", String(players)],
+      ]),
+      cta: { label: "Review squad", href },
+    }),
+    text: `${team.name} submitted a squad of ${players} for review. ${href}`,
+  };
+}
+
+function rosterReviewed({ team, approved, note }) {
+  const href = `${publicUrl()}/team-roster`;
+  return {
+    subject: approved ? `Your squad is approved - ${team.name}` : `Changes needed on your squad - ${team.name}`,
+    html: layout({
+      preheader: approved ? "Your squad has been approved." : "We've asked for a few changes to your squad.",
+      heading: approved ? "Your squad is approved" : "Changes needed on your squad",
+      bodyHtml: approved
+        ? `<p style="margin:0">Great news: the squad for <strong>${esc(team.name)}</strong> has been approved.${note ? ` Note from our team:` : ""}</p>${note ? `<blockquote style="margin:16px 0;padding:12px 16px;border-left:4px solid #17633e;background:#f4f7f8;white-space:pre-wrap">${esc(note)}</blockquote>` : ""}`
+        : `<p style="margin:0">We reviewed the squad for <strong>${esc(team.name)}</strong> and need a few changes before approving it:</p><blockquote style="margin:16px 0;padding:12px 16px;border-left:4px solid #007cc2;background:#f4f7f8;white-space:pre-wrap">${esc(note)}</blockquote><p style="margin:0">Update your players, then submit the squad again.</p>`,
+      cta: { label: approved ? "View your squad" : "Update your squad", href },
+    }),
+    text: approved
+      ? `The squad for ${team.name} is approved. ${href}`
+      : `Changes needed on the squad for ${team.name}: ${note}. ${href}`,
+  };
+}
+
 module.exports = {
+  managerRosterSubmitted,
+  rosterReviewed,
+  staffAssigned,
+  newMessage,
   invoiceIssued,
   esc,
   managerCancelled,

@@ -60,12 +60,7 @@ function requestCreated(request) {
 
 // `byTeam` = the team itself made the change (e.g. cancelled), so managers are
 // told too, instead of the team being emailed about its own action twice.
-function requestStatusChanged(
-  request,
-  status,
-  reason,
-  { byTeam = false } = {},
-) {
+function requestStatusChanged(request, status, reason, { byTeam = false } = {}) {
   return run("requestStatusChanged", async () => {
     const team = await teamAdminEmails(request.team_profile_id);
     sendMailSafe({
@@ -86,37 +81,58 @@ function requestStatusChanged(
 async function invoiceIssued(invoice, pdf, { resent = false } = {}) {
   try {
     const team = await teamAdminEmails(invoice.team_profile_id);
-    const recipients = [
-      ...new Set([...team, invoice.contact_email].filter(Boolean)),
-    ];
+    const recipients = [...new Set([...team, invoice.contact_email].filter(Boolean))];
     if (!recipients.length)
-      return {
-        status: "skipped",
-        reason: "No email address on file for this team",
-        recipients,
-      };
+      return { status: "skipped", reason: "No email address on file for this team", recipients };
     const result = await sendMailTracked({
       to: recipients,
       ...templates.invoiceIssued({ invoice, resent }),
       attachments: [
-        {
-          filename: `invoice-${invoice.invoice_number}.pdf`,
-          content: pdf.toString("base64"),
-        },
+        { filename: `invoice-${invoice.invoice_number}.pdf`, content: pdf.toString("base64") },
       ],
     });
     return { ...result, recipients };
   } catch (error) {
     console.error("[notify] invoiceIssued failed:", error.message);
-    return {
-      status: "failed",
-      reason: String(error.message).slice(0, 300),
-      recipients: [],
-    };
+    return { status: "failed", reason: String(error.message).slice(0, 300), recipients: [] };
   }
 }
 
+// byTeam: team wrote it, so managers are emailed; otherwise the team's admins and request contact are.
+function messagePosted(request, { body, byTeam, senderName }) {
+  return run("messagePosted", async () => {
+    const mail = templates.newMessage({ request, body, byTeam, senderName });
+    const to = byTeam
+      ? await managerEmails()
+      : [...(await teamAdminEmails(request.team_profile_id)), request.contact_email];
+    sendMailSafe({ to, ...mail });
+  });
+}
+
+function staffAssigned(request, { to, name, role, note, by }) {
+  return run("staffAssigned", async () => {
+    sendMailSafe({ to, ...templates.staffAssigned({ request, name, role, note, by }) });
+  });
+}
+
+function rosterSubmitted({ team, players }) {
+  return run("rosterSubmitted", async () => {
+    sendMailSafe({ to: await managerEmails(), ...templates.managerRosterSubmitted({ team, players }) });
+  });
+}
+
+function rosterReviewed({ team, approved, note }) {
+  return run("rosterReviewed", async () => {
+    const admins = await teamAdminEmails(team.id);
+    sendMailSafe({ to: [...admins, team.coach_email], ...templates.rosterReviewed({ team, approved, note }) });
+  });
+}
+
 module.exports = {
+  rosterSubmitted,
+  rosterReviewed,
+  staffAssigned,
+  messagePosted,
   invoiceIssued,
   managerEmails,
   teamAdminEmails,

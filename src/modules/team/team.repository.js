@@ -3,7 +3,8 @@ const { HttpError } = require("../../shared/http-error");
 
 const TEAM_COLUMNS = `t.id, t.name, t.sport, t.country, t.city, t.logo_updated_at, t.logo_url,
   t.created_at, t.updated_at, t.edition_id, e.name AS edition_name, t.age_category,
-  t.coach_name, t.coach_email, t.coach_phone, t.roster_consent_at, t.roster_submitted_at`;
+  t.coach_name, t.coach_email, t.coach_phone, t.roster_consent_at, t.roster_submitted_at,
+  t.roster_status, t.roster_review_note, t.roster_reviewed_at`;
 
 async function getTeam(teamId) {
   const { rows } = await query(

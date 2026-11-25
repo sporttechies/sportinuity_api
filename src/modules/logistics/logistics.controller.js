@@ -29,6 +29,9 @@ async function load(reference) {
 async function listRequests(req, res, next) {
   try {
     const { status, q, dateFrom, dateTo, limit, offset, teamId } = req.query;
+    const assignee = req.query.assignee === "me" ? req.user.id : req.query.assignee;
+    if (assignee && assignee !== "none" && !z.uuid().safeParse(assignee).success)
+      throw new HttpError(400, "Invalid assignee");
     const [result, counts] = await Promise.all([
       repository.listRequests({
         status,
@@ -38,6 +41,7 @@ async function listRequests(req, res, next) {
         limit,
         offset,
         teamProfileId: teamId,
+        assignee,
       }),
       repository.statusCounts(teamId),
     ]);

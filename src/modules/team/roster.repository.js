@@ -90,13 +90,34 @@ async function getDocument(teamId, id) {
 async function submitRoster(teamId) {
   await query(
     `UPDATE team_profiles
-        SET roster_consent_at = now(), roster_submitted_at = now(), updated_at = now()
+        SET roster_consent_at = now(), roster_submitted_at = now(), updated_at = now(),
+            roster_status = 'submitted', roster_review_note = NULL
       WHERE id = $1`,
     [teamId],
   );
 }
 
+// A squad that changes after submission has to be submitted (and reviewed) again.
+async function markEdited(teamId) {
+  await query(
+    `UPDATE team_profiles SET roster_status = 'draft', updated_at = now()
+      WHERE id = $1 AND roster_status IN ('submitted','approved')`,
+    [teamId],
+  );
+}
+
+async function setReview(teamId, { status, note, reviewerId }) {
+  const { rows } = await query(
+    `UPDATE team_profiles
+        SET roster_status = $2, roster_review_note = $3, roster_reviewed_at = now(), roster_reviewed_by = $4, updated_at = now()
+      WHERE id = $1 AND roster_status = 'submitted' RETURNING id`,
+    [teamId, status, note, reviewerId],
+  );
+  return rows.length > 0;
+}
+
 module.exports = {
+  markEdited, setReview,
   listPlayers, countPlayers, getPlayer, newPlayerId, insertPlayer,
   updatePlayer, deletePlayer, getDocument, submitRoster,
 };

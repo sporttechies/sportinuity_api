@@ -37,6 +37,12 @@ app.use("/api/suppliers", require("./modules/suppliers/suppliers.routes"));
 app.use("/api/quotations", require("./modules/suppliers/quotations.routes"));
 app.use("/api/rooming", require("./modules/rooming/rooming.routes"));
 app.use("/api/meals", require("./modules/meals/meals.routes"));
+app.use("/api/transport", require("./modules/transport/transport.routes"));
+app.use("/api/messages", require("./modules/messages/messages.routes"));
+app.use(
+  "/api/assignments",
+  require("./modules/assignments/assignments.routes"),
+);
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
 

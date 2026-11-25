@@ -52,6 +52,9 @@ function serializeTeam(team) {
       phone: team.coach_phone ?? null,
     },
     rosterSubmittedAt: team.roster_submitted_at ?? null,
+    rosterStatus: team.roster_status ?? "draft",
+    rosterReviewNote: team.roster_review_note ?? null,
+    rosterReviewedAt: team.roster_reviewed_at ?? null,
     createdAt: team.created_at,
     updatedAt: team.updated_at,
   };
