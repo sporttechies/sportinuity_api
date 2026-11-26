@@ -128,7 +128,33 @@ function rosterReviewed({ team, approved, note }) {
   });
 }
 
+// ---- Sports Travel ---------------------------------------------------------------
+// `booking` is the serialized booking (see travel/bookings.controller).
+function travelBookingCreated(booking) {
+  return run("travelBookingCreated", async () => {
+    if (booking.contactEmail) sendMailSafe({ to: booking.contactEmail, ...templates.travelBookingReceived({ booking }) });
+    sendMailSafe({ to: await managerEmails(), ...templates.managerNewTravelBooking({ booking }) });
+  });
+}
+function travelBookingStatus(booking, reason) {
+  return run("travelBookingStatus", async () => {
+    if (booking.contactEmail) sendMailSafe({ to: booking.contactEmail, ...templates.travelBookingStatus({ booking, reason }) });
+  });
+}
+function travelBookingInvoice(booking, pdf) {
+  return run("travelBookingInvoice", async () => {
+    sendMailSafe({
+      to: booking.contactEmail,
+      ...templates.travelBookingInvoice({ booking }),
+      attachments: [{ filename: `invoice-${booking.invoice.number}.pdf`, content: pdf.toString("base64") }],
+    });
+  });
+}
+
 module.exports = {
+  travelBookingCreated,
+  travelBookingStatus,
+  travelBookingInvoice,
   rosterSubmitted,
   rosterReviewed,
   staffAssigned,

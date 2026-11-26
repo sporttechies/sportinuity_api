@@ -11,6 +11,8 @@ const { errorHandler } = require("./shared/middleware/error-handler");
 const { checkDatabaseConnection, closeDatabase } = require("./config/db");
 
 const app = express();
+// Render sits behind one proxy; this makes req.ip the real client (used by the rate limiter).
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(
   cors({
@@ -43,6 +45,8 @@ app.use(
   "/api/assignments",
   require("./modules/assignments/assignments.routes"),
 );
+app.use("/api/travel", require("./modules/travel/travel.routes"));
+app.use("/api/public/travel", require("./modules/travel/public.routes"));
 app.use((_req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
 

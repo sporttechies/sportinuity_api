@@ -286,7 +286,88 @@ function rosterReviewed({ team, approved, note }) {
   };
 }
 
+// ---- Sports Travel bookings -----------------------------------------------------
+const bookingLink = (b) => `${publicUrl()}/travel/booking/${encodeURIComponent(b.reference)}`;
+const bookingTotal = (b) => `${String(b.currency).trim()} ${(Number(b.totalCents) / 100).toFixed(2)}`;
+const bookingRows = (b) => [
+  ["Booking", b.reference],
+  ["Trip", b.package.title],
+  ["Destination", b.package.destination],
+  ["Dates", `${b.package.startDate} to ${b.package.endDate}`],
+  ["Travellers", String(b.seats)],
+  ["Total", bookingTotal(b)],
+];
+
+function travelBookingReceived({ booking: b }) {
+  return {
+    subject: `We received your booking ${b.reference}`,
+    html: layout({
+      preheader: `Booking ${b.reference} for ${b.package.title}`,
+      heading: "Booking received",
+      bodyHtml: `<p>Hi ${esc(b.contactName)}, thanks for booking with Sportinuity. Our team will confirm your booking and send an invoice shortly. You can pay by bank transfer once the invoice arrives.</p>${detailsTable(bookingRows(b))}<p style="font-size:13px;color:#64748b">To view your booking you'll need this reference and the email or phone number you booked with.</p>`,
+      cta: { label: "View your booking", href: bookingLink(b) },
+    }),
+    text: `Booking ${b.reference} received for ${b.package.title}. View it: ${bookingLink(b)}`,
+  };
+}
+
+function managerNewTravelBooking({ booking: b }) {
+  return {
+    subject: `New travel booking ${b.reference} - ${b.package.title}`,
+    html: layout({
+      preheader: `${b.organisation || b.contactName} booked ${b.seats} seat${b.seats === 1 ? "" : "s"}.`,
+      heading: "New travel booking",
+      bodyHtml: detailsTable([
+        ...bookingRows(b),
+        ["Customer", b.organisation ? `${b.organisation} (${b.contactName})` : b.contactName],
+        ["Type", b.customerType],
+        ["Email", b.contactEmail],
+        ["Phone", b.contactPhone],
+      ]),
+      cta: { label: "Open booking", href: `${managerUrl()}/travel/bookings/${b.id}` },
+    }),
+    text: `New travel booking ${b.reference}. ${managerUrl()}/travel/bookings/${b.id}`,
+  };
+}
+
+function travelBookingStatus({ booking: b, reason }) {
+  const cancelled = b.status === "cancelled";
+  return {
+    subject: `Booking ${b.reference} ${cancelled ? "cancelled" : "confirmed"}`,
+    html: layout({
+      preheader: `Booking ${b.reference} is ${cancelled ? "cancelled" : "confirmed"}.`,
+      heading: cancelled ? "Your booking was cancelled" : "Your booking is confirmed",
+      bodyHtml: `<p>Hi ${esc(b.contactName)}, ${cancelled ? "your booking has been cancelled." : "your booking is confirmed. We'll be in touch with the next steps."}</p>${cancelled && reason ? `<p><strong>Note:</strong> ${esc(reason)}</p>` : ""}${detailsTable(bookingRows(b))}`,
+      cta: { label: "View your booking", href: bookingLink(b) },
+    }),
+    text: `Booking ${b.reference} ${cancelled ? "cancelled" : "confirmed"}. ${bookingLink(b)}`,
+  };
+}
+
+function travelBookingInvoice({ booking: b }) {
+  return {
+    subject: `Invoice ${b.invoice.number} for booking ${b.reference}`,
+    html: layout({
+      preheader: `Invoice ${b.invoice.number} - ${bookingTotal(b)}`,
+      heading: "Your invoice is ready",
+      bodyHtml: `<p>Hi ${esc(b.contactName)}, your invoice is attached as a PDF. Please pay by bank transfer using the details on it, and quote the invoice number as the payment reference.</p>${detailsTable([
+        ["Invoice", b.invoice.number],
+        ["Booking", b.reference],
+        ["Trip", b.package.title],
+        ["Total", bookingTotal(b)],
+        ["Due date", b.invoice.dueDate],
+      ])}`,
+      cta: { label: "View your booking", href: bookingLink(b) },
+    }),
+    text: `Invoice ${b.invoice.number} (${bookingTotal(b)}) for booking ${b.reference} is attached. ${bookingLink(b)}`,
+  };
+}
+
 module.exports = {
+  travelBookingReceived,
+  managerNewTravelBooking,
+  travelBookingStatus,
+  travelBookingInvoice,
   managerRosterSubmitted,
   rosterReviewed,
   staffAssigned,
